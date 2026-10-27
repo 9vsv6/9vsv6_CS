@@ -1,14 +1,36 @@
 # Arabic Anime – CloudStream extensions
 
-Three Arabic providers for [CloudStream 3](https://github.com/recloudstream/cloudstream):
+Four Arabic providers for [CloudStream 3](https://github.com/recloudstream/cloudstream):
 
 | Provider | Site | Catalog | Playback |
 |---|---|---|---|
 | **WitAnime** | <https://witanime.site> | ✅ browse / search / episodes | ⚠️ depends on the site's stream gate (see below) |
 | **Anime4Up** | <https://w1.anime4up.rest> | ✅ browse / search / episodes | ✅ direct HLS + supported hosts |
 | **EgyDead** | <https://k8w4e.sbs> | ✅ movies / series / anime, browse / search / episodes | ✅ mirrors via the site's own player API |
+| **Arabic Multi** | TMDB catalogue | ✅ movies / series (no anime) | ✅ links resolved from Arabic sites (EgyDead now) |
 
 Everything is scraped from the public pages of those sites. The repo does not host any video files.
+
+---
+
+## Arabic Multi
+
+`ArabicMulti` is a metadata-first provider: the whole catalogue (home rows, search,
+posters, plots, cast, seasons, episodes) comes from **TMDB**, and playback is
+resolved from Arabic streaming sites by title + season + episode.
+
+It is built on CloudStream's `TmdbProvider`, so episodes carry a
+`TmdbLink(title, season, episode)` payload. `loadLinks` then asks each source in
+turn and merges whatever it finds:
+
+| Source | Status | Notes |
+|---|---|---|
+| **EgyDead** | ✅ working | search → season page → episode → watch page → MegaMax Inertia API. A verified series episode returned **20 mirrors** (UQload, Vidmoly, MixDrop, …). |
+| **3iskk** | ⚠️ blocked | DooPlay theme; episode list and player are loaded by `admin-ajax.php` with per-page nonces, and there is no sitemap to discover episode URLs. Needs a deeper reverse-engineering pass. |
+| **WeCima** | ❌ blocked | `/watch/<slug>` embeds `/m/<hash>` which answers `انتهت صلاحية الرابط` (link expired) immediately, even with the same cookies/headers. Token is gated behind their JS. |
+
+Adding a source = one resolver object; `EgyDeadSource.kt` is the reference
+implementation and shows the shape (`resolve(title, season, episode, …)`).
 
 ---
 
