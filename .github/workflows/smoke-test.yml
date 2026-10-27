@@ -1,13 +1,10 @@
 name: Smoke test
 
+# Manual only: GitHub-hosted runners sit in datacenter ranges that the source
+# sites block (Cloudflare bot management), so the checks pass locally but not
+# from CI. Run `node tools/smoke-test.mjs` on your own machine instead.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * *"
-  push:
-    branches:
-      - main
-      - master
 
 permissions:
   contents: read
@@ -18,9 +15,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Run provider smoke test
         run: node tools/smoke-test.mjs

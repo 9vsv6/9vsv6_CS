@@ -131,7 +131,9 @@ Example output (10/10 today):
 [PASS] HLS plays without headers — 200 application/vnd.apple.mpegurl; charset=UTF-8
 ```
 
-It runs automatically on every push and nightly at 03:00 UTC via `.github/workflows/smoke-test.yml`.
+It runs on demand via `.github/workflows/smoke-test.yml` (Actions → **Smoke test** → Run workflow).
+Please run it locally rather than relying on CI: GitHub-hosted runners are in datacenter IP ranges that
+both sites block, so the checks pass on a home connection and fail from CI.
 
 ## Disclaimer
 
