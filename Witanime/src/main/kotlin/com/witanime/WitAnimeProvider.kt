@@ -21,7 +21,6 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.cloudstream3.utils.newExtractorLink
 import org.json.JSONObject
-import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLEncoder
 
@@ -51,6 +50,9 @@ class WitAnime : MainAPI() {
         private val VIDEO_REGEX = Regex("""https?://[^"'\s<>\\]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>\\]*)?""")
         private val IFRAME_REGEX = Regex("""(?i)<iframe[^>]+src=["']([^"']+)["']""")
         private val STREAM_VAR_REGEX = Regex("""(?:let|var|const)\s+streamUrl\s*=\s*["']([^"']+)["']""")
+
+        private const val A4U_BASE = "https://w1.anime4up.rest"
+        private val A4U_STREAM_REGEX = Regex("""(?:let|var|const)\s+streamUrl\s*=\s*["']([^"']+)["']""")
     }
 
     // ---------------------------------------------------------------- headers
@@ -170,10 +172,25 @@ class WitAnime : MainAPI() {
         }
         if (watch.code != 200) return false
 
-        val csrf = Regex("<meta name=\"csrf-token\" content=\"([^\"]+)\"")
-            .find(watch.text)?.groupValues?.get(1) ?: return false
+        if (tryNativeSources(watchUrl, watch.text, watch.cookies, subtitleCallback, callback)) {
+            return true
+        }
 
-        val cookies = watch.cookies
+        // The website's own player (/watch/stream-gate/<token>) answers 404 even for
+        // a valid session, so resolve the same title + episode through Anime4Up.
+        return fallbackToAnime4Up(watchUrl, subtitleCallback, callback)
+    }
+
+    private suspend fun tryNativeSources(
+        watchUrl: String,
+        pageHtml: String,
+        cookies: Map<String, String>,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        val csrf = Regex("<meta name=\"csrf-token\" content=\"([^\"]+)\"")
+            .find(pageHtml)?.groupValues?.get(1) ?: return false
+
         val manifest = try {
             app.post(
                 "$watchUrl/sources",
@@ -231,6 +248,182 @@ class WitAnime : MainAPI() {
             }
         }
         return found
+    }
+
+    // ------------------------------------------------- Anime4Up fallback
+
+    private fun a4uHeaders(referer: String? = null): Map<String, String> = buildMap {
+        put("User-Agent", UA)
+        put("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+        put("Accept-Language", "ar,en-US;q=0.9,en;q=0.8")
+        if (referer != null) put("Referer", referer)
+    }
+
+    /**
+     * WitAnime's player gate is broken server-side, so the same title and episode
+     * number are looked up on Anime4Up and those streams are returned instead.
+     */
+    private suspend fun fallbackToAnime4Up(
+        watchUrl: String,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit,
+    ): Boolean {
+        // /watch/black-clover-2nd-season/4        -> black-clover-2nd-season
+        // /watch/movie/the-last-naruto-the-movie  -> the-last-naruto-the-movie
+        val path = watchUrl.substringAfter("/watch/", "")
+        if (path.isBlank()) return false
+        val slug = if (path.startsWith("movie/")) {
+            path.removePrefix("movie/").trimEnd('/')
+        } else {
+            path.substringBefore("/")
+        }
+        if (slug.isBlank()) return false
+
+        val episode = watchUrl.trimEnd('/').substringAfterLast('/').toIntOrNull() ?: 1
+        val query = URLEncoder.encode(slug.replace('-', ' '), "UTF-8")
+
+        val searchPage = try {
+            app.get("$A4U_BASE/?s=$query", headers = a4uHeaders()).document
+        } catch (_: Exception) {
+            return false
+        }
+
+        var animeUrl: String? = null
+        var bestScore = Int.MAX_VALUE
+        for (card in searchPage.select(".anime-card-themex")) {
+            val href = card.selectFirst("a[href*=\"/anime/\"]")?.attr("href") ?: continue
+            val candidate = href.substringAfter("/anime/", "").trimEnd('/')
+            if (candidate.isBlank()) continue
+            val score = slugScore(slug, candidate)
+            if (score < bestScore) {
+                bestScore = score
+                animeUrl = href
+            }
+        }
+        if (bestScore > 2) animeUrl = null
+
+        // Search can miss titles that exist; try the slug directly.
+        if (animeUrl == null) {
+            val guesses = linkedSetOf(slug)
+            if (slug.endsWith("-movie")) guesses.add(slug.removeSuffix("-movie"))
+            for (candidate in guesses) {
+                val direct = try {
+                    app.get("$A4U_BASE/anime/$candidate/", headers = a4uHeaders())
+                } catch (_: Exception) {
+                    null
+                }
+                if (direct != null && direct.code == 200 && direct.url.contains("/anime/")) {
+                    animeUrl = direct.url
+                    break
+                }
+            }
+        }
+
+        val anime = animeUrl ?: return false
+        val animePage = try {
+            app.get(anime, headers = a4uHeaders()).document
+        } catch (_: Exception) {
+            return false
+        }
+
+        var episodeUrl = findEpisodeUrl(animePage, episode)
+        if (episodeUrl == null) {
+            val lastPage = animePage.select(".episodes-pagination-holder a")
+                .mapNotNull { it.text().trim().toIntOrNull() }
+                .maxOrNull() ?: 1
+            val total = animePage.select(".anime-info")
+                .firstOrNull { it.text().contains("عدد الحلقات") }
+                ?.text()?.filter { it.isDigit() }?.toIntOrNull()
+
+            val guesses = LinkedHashSet<Int>()
+            // Anime4Up lists ~48 episodes per page, newest first.
+            if (total != null && total >= episode) {
+                guesses.add(((total - episode) / 48) + 1)
+            }
+            for (pageNumber in 2..minOf(lastPage, 30)) guesses.add(pageNumber)
+
+            val base = anime.trimEnd('/')
+            for (pageNumber in guesses) {
+                if (pageNumber < 2 || pageNumber > lastPage) continue
+                val next = try {
+                    app.get("$base/page/$pageNumber/", headers = a4uHeaders(anime)).document
+                } catch (_: Exception) {
+                    continue
+                }
+                episodeUrl = findEpisodeUrl(next, episode)
+                if (episodeUrl != null) break
+            }
+        }
+
+        val epUrl = episodeUrl ?: return false
+        val epPage = try {
+            app.get(epUrl, headers = a4uHeaders(anime)).document
+        } catch (_: Exception) {
+            return false
+        }
+
+        var emitted = false
+        for (server in epPage.select("#episode-servers li[data-watch]")) {
+            val serverUrl = server.attr("data-watch").trim()
+            if (serverUrl.isBlank()) continue
+            val serverName = server.selectFirst(".watch-server-name")?.text()?.trim()
+                ?.takeIf { it.isNotBlank() } ?: "server"
+            val quality = server.selectFirst(".quality")?.text()?.trim().orEmpty()
+
+            val extracted = try {
+                com.lagradost.cloudstream3.utils.loadExtractor(serverUrl, epUrl, subtitleCallback, callback)
+            } catch (_: Exception) {
+                false
+            }
+            if (extracted) {
+                emitted = true
+                continue
+            }
+
+            val playerPage = try {
+                app.get(serverUrl, headers = a4uHeaders(epUrl), timeout = 30).text
+            } catch (_: Exception) {
+                ""
+            }
+            val stream = A4U_STREAM_REGEX.find(playerPage)?.groupValues?.get(1) ?: continue
+
+            callback.invoke(
+                newExtractorLink(
+                    source = this.name,
+                    name = "${this.name} via Anime4Up | $serverName",
+                    url = stream.replace("\\/", "/"),
+                    type = ExtractorLinkType.M3U8,
+                ) {
+                    this.referer = serverUrl
+                    this.quality = qualityValue(quality)
+                    this.headers = mapOf("User-Agent" to UA, "Referer" to serverUrl)
+                }
+            )
+            emitted = true
+        }
+        return emitted
+    }
+
+    private fun slugScore(wanted: String, candidate: String): Int {
+        val a = wanted.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+        val b = candidate.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+        return when {
+            a.isBlank() || b.isBlank() -> Int.MAX_VALUE
+            a == b -> 0
+            b.startsWith(a) || a.startsWith(b) -> 1
+            b.contains(a) || a.contains(b) -> 2
+            else -> Int.MAX_VALUE
+        }
+    }
+
+    private fun findEpisodeUrl(document: Document, number: Int): String? {        for (card in document.select(".anime-card-themex")) {
+            val parsed = card.selectFirst(".ep_num")?.text()?.filter { it.isDigit() }?.toIntOrNull()
+            if (parsed == number) {
+                val href = card.selectFirst("a[href*=\"/episode/\"]")?.attr("href")
+                if (!href.isNullOrBlank()) return href
+            }
+        }
+        return null
     }
 
     /**

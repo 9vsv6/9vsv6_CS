@@ -1,4 +1,4 @@
-version = 1
+version = 2
 
 cloudstream {
     description = "WitAnime - Arabic subtitled anime streaming (witanime.site)"

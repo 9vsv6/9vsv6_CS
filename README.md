@@ -76,7 +76,11 @@ Output:
 - Anime page: `h1`, poster, genre pills, info grid, `/watch/<slug>/<n>` episode links
 - Playback: the site exposes `POST /watch/<slug>/<n>/sources` (needs the `X-CSRF-TOKEN` from the page and a browser-like header set – including `sec-ch-ua*`). The returned tokens point at `/watch/stream-gate/<token>`, which the plugin resolves to the real host before handing it to CloudStream.
 
-> **Known issue:** at the time of writing `https://witanime.site/watch/stream-gate/<token>` answers `404` for direct requests even with a valid session and browser headers, while the `/sources` manifest works. If the site keeps this behaviour, WitAnime lists the catalog and episodes but returns no playable links. Nothing client-side can fix that – it is the website's player endpoint. Browsing/searching stays fully functional, and playback starts working again as soon as the site restores the gate.
+> **The site's own player is broken.** `https://witanime.site/watch/stream-gate/<token>` answers `404` for every episode, provider and session, even though `/sources` returns valid tokens. That is a server-side bug, not something a client can work around.
+>
+> **Fix (v2):** when the native player yields nothing, the provider takes the slug from the episode URL (`/watch/black-clover-2nd-season/4` → `black-clover-2nd-season`), finds the same title on Anime4Up (exact slug → prefix → substring → direct `/anime/<slug>/` guess), locates the same episode number and returns those streams, labelled `WitAnime via Anime4Up`. Anime4Up's HLS plays without any special headers, so this works from CloudStream and Harbor alike.
+>
+> Episodes that Anime4Up does not carry still return nothing; the log line in that case is `no matching Anime4Up title`.
 
 ### EgyDead
 
