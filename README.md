@@ -103,6 +103,36 @@ Output:
 - **WitAnime:** search works, `Naruto` loads all 220 episodes, movie pages produce a single movie episode, and `POST /watch/<slug>/<n>/sources` returns real player tokens. Only the `/watch/stream-gate/<token>` step is currently broken on the site (see above).
 - **EgyDead:** the home page and all three category pages return 48 cards per page and paginate, search works, movie pages produce a `Movie` entry with poster/plot/year/genres, an episode is resolved to its season (Naruto Shippuden: 500 episodes), a `/Series/` page merges all 7 Naruto seasons (1988 episodes) and a `/film-series/` collection lists its 10 movies. The MegaMax player API returns 24 quality/mirror pairs for an episode, 19 of which match a bundled CloudStream extractor (StreamHG, Vidmoly, MixDrop, DoodStream, Vidara, EarnVids, Voe); pages using direct servers expose them as separate `serversList` entries.
 
+## Automated smoke test
+
+`tools/smoke-test.mjs` hits the same endpoints and applies the same parsing rules as the plugins, so a failure there means the provider will fail in CloudStream/Harbor too:
+
+```bash
+node tools/smoke-test.mjs              # both providers
+node tools/smoke-test.mjs anime4up     # only Anime4Up
+node tools/smoke-test.mjs witanime     # only WitAnime
+```
+
+Example output (10/10 today):
+
+```
+== WitAnime ==
+[PASS] search page — 25 unique titles
+[PASS] anime page + episode list — 220 episodes (1..220)
+[PASS] watch page + csrf token — token found
+[PASS] sources manifest — 5 servers
+[KNOWN] stream gate (site player) — site returns 404 — playback blocked server-side
+
+== Anime4Up ==
+[PASS] search page — 6 unique titles
+[PASS] anime page + episode list — 48 episodes on page 1, 5 pages
+[PASS] episode page + servers — 8 servers
+[PASS] internal player → HLS url — cdn1.7p4bm32.shop
+[PASS] HLS plays without headers — 200 application/vnd.apple.mpegurl; charset=UTF-8
+```
+
+It runs automatically on every push and nightly at 03:00 UTC via `.github/workflows/smoke-test.yml`.
+
 ## Disclaimer
 
 This project is not affiliated with WitAnime, Anime4Up or EgyDead. It only indexes publicly available pages, in the same way a browser does. All content belongs to its respective owners.
