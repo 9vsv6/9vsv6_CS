@@ -52,7 +52,7 @@ subprojects {
         setRepo(
             System.getenv("GITHUB_REPOSITORY")
                 ?.let { "https://github.com/$it" }
-                ?: "https://github.com/YOUR_GITHUB_USERNAME/cloudstream-arabic-anime"
+                ?: "https://github.com/9vsv6/9vsv6_CS"
         )
         authors = listOf("ArabicAnimePlugins")
     }

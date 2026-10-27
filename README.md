@@ -1,39 +1,51 @@
 # Arabic Anime – CloudStream extensions
 
-Two Arabic anime providers for [CloudStream 3](https://github.com/recloudstream/cloudstream):
+Three Arabic providers for [CloudStream 3](https://github.com/recloudstream/cloudstream):
 
 | Provider | Site | Catalog | Playback |
 |---|---|---|---|
 | **WitAnime** | <https://witanime.site> | ✅ browse / search / episodes | ⚠️ depends on the site's stream gate (see below) |
 | **Anime4Up** | <https://w1.anime4up.rest> | ✅ browse / search / episodes | ✅ direct HLS + supported hosts |
+| **EgyDead** | <https://k8w4e.sbs> | ✅ movies / series / anime, browse / search / episodes | ✅ mirrors via the site's own player API |
 
-Everything is scraped from the public pages of both sites. The repo does not host any video files.
+Everything is scraped from the public pages of those sites. The repo does not host any video files.
 
 ---
 
-## 1. Build (automatic)
+## 1. Publish the repo (one time)
 
-Every push to `main` runs the **Build** workflow (`.github/workflows/build.yml`), which compiles both
-plugins and force-publishes the result to the `builds` branch:
+You need a **public** GitHub repository so CloudStream can reach the raw files.
 
-- `builds/plugins.json`
-- `builds/Witanime.cs3`, `builds/Anime4up.cs3`
-- `builds/repo.json`, `builds/icon.png`
+```powershell
+cd cloudstream-arabic-anime
+git init
+git add .
+git commit -m "WitAnime + Anime4Up CloudStream plugins"
+git branch -M main
+git remote add origin https://github.com/<your-username>/cloudstream-arabic-anime.git
+git push -u origin main
+```
 
-You can also trigger it manually from the **Actions** tab (**Build → Run workflow**).
-The first run takes ~3 minutes and needs no secrets – it uses the default `GITHUB_TOKEN`.
+Then on GitHub:
 
-> Do not add the repository to CloudStream before the `builds` branch exists, otherwise the download will fail.
+1. Open **Settings → Actions → General** and make sure workflows are enabled.
+2. Open the **Actions** tab and run the **Build** workflow once (or just push – it runs automatically).
+3. The workflow compiles the plugins and publishes them to a `builds` branch:
+   - `builds/plugins.json`
+   - `builds/Witanime.cs3`, `builds/Anime4up.cs3`, `builds/EgyDead.cs3`
+   - `builds/repo.json`, `builds/icon.png`
+
+> The first run takes ~3 minutes. Do not add the repository to CloudStream before the `builds` branch exists, otherwise the download will fail.
 
 ## 2. Add the repository in CloudStream
 
 In CloudStream: **Settings → Extensions → Add repository**, then paste:
 
 ```
-https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/repo.json
+https://raw.githubusercontent.com/<your-username>/cloudstream-arabic-anime/builds/repo.json
 ```
 
-Open the new repository and install **WitAnime** and **Anime4Up**.
+Open the new repository and install **WitAnime**, **Anime4Up** and **EgyDead**.
 
 ## 3. Build locally (optional)
 
@@ -66,21 +78,31 @@ Output:
 
 > **Known issue:** at the time of writing `https://witanime.site/watch/stream-gate/<token>` answers `404` for direct requests even with a valid session and browser headers, while the `/sources` manifest works. If the site keeps this behaviour, WitAnime lists the catalog and episodes but returns no playable links. Nothing client-side can fix that – it is the website's player endpoint. Browsing/searching stays fully functional, and playback starts working again as soon as the site restores the gate.
 
+### EgyDead
+
+- Search: `GET /?s=<query>` – the cards live in `ul.posts-list li.movieItem` (same markup as every archive page).
+- Listings: home (`/`, paginated with `/page/N/`), `/category/english-movies/`, `/departments/series/`, `/series-category/anime-series/`.
+- Page type is read from the page's JSON-LD: `Movie`, `TVEpisode`, `TVSeason` or `TVSeries`, which decides whether the entry becomes a movie, a season with episodes or a show with all seasons merged.
+- Episodes: `.EpsList li a[href*="/episodes/"]` on a season page; an episode page is resolved through its breadcrumb back to its season, so opening one episode shows the whole season.
+- Playback: `<post>/watch/` exposes `ul.serversList li[data-link]`. Every server is first offered to CloudStream's extractor registry. The site's own **MegaMax** player (`q7v3k8m2p1.top/iframe/<id>`, a Laravel + Inertia SPA) is then asked for its `streams` prop with the Inertia headers (`X-Inertia`, `X-Inertia-Version`, `X-Inertia-Partial-Data: streams`), which returns every quality/mirror pair (StreamWish, MixDrop, DoodStream, Vidmoly, Voe, VidHide, Vidara, …) as JSON. Those mirrors are handed to the extractor registry too, with the quality label applied. A raw `m3u8`/`mp4` scan is the last resort for players nothing recognises.
+
 ## Notes
 
-- Both providers send a desktop Chrome header set because the sites check `sec-ch-ua`, `Accept-Language` and `Sec-Fetch-*` before serving some endpoints.
+- All providers send a desktop Chrome header set because the sites check `sec-ch-ua`, `Accept-Language` and `Sec-Fetch-*` before serving some endpoints.
 - Only public pages are used; no account is required for browsing.
-- Movies are supported on both sites (`/movie/<slug>` on WitAnime, `/anime-type/movie-3/` on Anime4Up).
+- Movies are supported on all three sites (`/movie/<slug>` on WitAnime, `/anime-type/movie-3/` on Anime4Up, plain post pages on EgyDead).
 - Sites change domains regularly. If a provider stops loading, update `mainUrl` in the matching provider file:
   - `Witanime/src/main/kotlin/com/witanime/WitAnimeProvider.kt`
   - `Anime4up/src/main/kotlin/com/anime4up/Anime4UpProvider.kt`
+  - `EgyDead/src/main/kotlin/com/egydead/EgyDeadProvider.kt`
 
 ## What has been verified
 
-- Both modules compile and package against `com.lagradost:cloudstream3:pre-release` (Gradle 9.3.1, AGP 8.13.2, Kotlin 2.3.20).
+- All three modules compile and package against `com.lagradost:cloudstream3:pre-release` (Gradle 9.3.1, AGP 8.13.2, Kotlin 2.3.20).
 - **Anime4Up:** search returns results, `Naruto` loads all 220 episodes (5 paginated pages), an episode exposes 8 servers, and the site's own player yields a valid `#EXTM3U` master playlist.
 - **WitAnime:** search works, `Naruto` loads all 220 episodes, movie pages produce a single movie episode, and `POST /watch/<slug>/<n>/sources` returns real player tokens. Only the `/watch/stream-gate/<token>` step is currently broken on the site (see above).
+- **EgyDead:** the home page and all three category pages return 48 cards per page and paginate, search works, movie pages produce a `Movie` entry with poster/plot/year/genres, an episode is resolved to its season (Naruto Shippuden: 500 episodes), a `/Series/` page merges all 7 Naruto seasons (1988 episodes) and a `/film-series/` collection lists its 10 movies. The MegaMax player API returns 24 quality/mirror pairs for an episode, 19 of which match a bundled CloudStream extractor (StreamHG, Vidmoly, MixDrop, DoodStream, Vidara, EarnVids, Voe); pages using direct servers expose them as separate `serversList` entries.
 
 ## Disclaimer
 
-This project is not affiliated with WitAnime or Anime4Up. It only indexes publicly available pages, in the same way a browser does. All content belongs to its respective owners.
+This project is not affiliated with WitAnime, Anime4Up or EgyDead. It only indexes publicly available pages, in the same way a browser does. All content belongs to its respective owners.

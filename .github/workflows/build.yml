@@ -64,7 +64,7 @@ jobs:
           repo = os.environ["GITHUB_REPOSITORY"]
           data = {
               "name": "Arabic Anime",
-              "description": "WitAnime + Anime4Up - Arabic subtitled anime for CloudStream",
+              "description": "WitAnime + Anime4Up + EgyDead - Arabic anime, movies and series for CloudStream",
               "iconUrl": f"https://raw.githubusercontent.com/{repo}/builds/icon.png",
               "manifestVersion": 1,
               "pluginLists": [
