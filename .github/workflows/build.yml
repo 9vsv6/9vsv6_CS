@@ -1,0 +1,78 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Build plugins
+        run: |
+          chmod +x gradlew
+          ./gradlew make makePluginsJson --stacktrace
+
+      - name: Collect build output
+        run: |
+          mkdir -p publish
+          cp build/plugins.json publish/plugins.json
+          cp icon.png publish/icon.png
+          find . -name "*.cs3" -exec cp {} publish/ \;
+          ls -la publish
+
+      - name: Generate repo.json
+        run: |
+          python3 - <<'PY'
+          import json, os
+          repo = os.environ["GITHUB_REPOSITORY"]
+          data = {
+              "name": "Arabic Anime",
+              "description": "WitAnime + Anime4Up - Arabic subtitled anime for CloudStream",
+              "iconUrl": f"https://raw.githubusercontent.com/{repo}/builds/icon.png",
+              "manifestVersion": 1,
+              "pluginLists": [
+                  f"https://raw.githubusercontent.com/{repo}/builds/plugins.json"
+              ],
+          }
+          with open("publish/repo.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, indent=2, ensure_ascii=False)
+          PY
+
+      - name: Publish to builds branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./publish
+          publish_branch: builds
+          force_orphan: true
+          commit_message: "Build ${{ github.sha }}"
