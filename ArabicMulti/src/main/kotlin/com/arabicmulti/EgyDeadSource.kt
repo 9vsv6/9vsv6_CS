@@ -50,7 +50,19 @@ object EgyDeadSource {
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"
         )
         put("Accept-Language", "ar,en-US;q=0.9,en;q=0.8")
+        put("sec-ch-ua", "\"Chromium\";v=\"131\", \"Google Chrome\";v=\"131\", \"Not?A_Brand\";v=\"24\"")
+        put("sec-ch-ua-mobile", "?0")
+        put("sec-ch-ua-platform", "\"Windows\"")
+        put("Sec-Fetch-Dest", "document")
+        put("Sec-Fetch-Mode", "navigate")
+        put("Sec-Fetch-Site", if (referer == null) "none" else "same-origin")
+        put("Sec-Fetch-User", "?1")
+        put("Upgrade-Insecure-Requests", "1")
         if (referer != null) put("Referer", referer)
+    }
+
+    private fun playerHeaders(referer: String): Map<String, String> = headers(referer).toMutableMap().apply {
+        this["Sec-Fetch-Dest"] = "iframe"
     }
 
     suspend fun resolve(
@@ -204,21 +216,49 @@ object EgyDeadSource {
 
     // ---------------------------------------------------------------- player
 
+    private fun extractServers(document: Document): List<Pair<String, String>> {
+        val primary = document.select("ul.serversList li[data-link]").mapNotNull { element ->
+            val link = element.attr("data-link").trim()
+            if (link.isBlank()) null else element.text().trim().ifBlank { "server" } to link
+        }
+        if (primary.isNotEmpty()) return primary
+
+        // Interstitial / alternate layouts: any data-link, then a bare iframe.
+        val anyDataLink = document.select("[data-link]").mapNotNull { element ->
+            val link = element.attr("data-link").trim()
+            if (!link.startsWith("http")) null else element.text().trim().ifBlank { "server" } to link
+        }
+        if (anyDataLink.isNotEmpty()) return anyDataLink
+
+        val iframe = document.selectFirst("iframe[src]")?.attr("src")?.trim()
+        if (!iframe.isNullOrBlank() && iframe.startsWith("http")) {
+            return listOf("iframe" to iframe)
+        }
+        return emptyList()
+    }
+
     private suspend fun loadWatch(
         watchUrl: String,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit,
     ): Boolean {
-        val document = try {
-            app.get(watchUrl, headers = headers()).document
+        val first = try {
+            app.get(watchUrl, headers = headers(watchUrl), timeout = 30)
         } catch (_: Exception) {
             return false
         }
 
-        val servers = document.select("ul.serversList li[data-link]").mapNotNull { element ->
-            val link = element.attr("data-link").trim()
-            if (link.isBlank()) null else element.text().trim() to link
+        var servers = extractServers(first.document)
+
+        // The site sometimes replies with a short "wait a moment" interstitial
+        // that only sets a cookie; retry once with those cookies.
+        if (servers.isEmpty() && first.cookies.isNotEmpty()) {
+            val retry = runCatching {
+                app.get(watchUrl, headers = headers(watchUrl), cookies = first.cookies, timeout = 30)
+            }.getOrNull()
+            if (retry != null) servers = extractServers(retry.document)
         }
+
         if (servers.isEmpty()) return false
 
         var found = false
@@ -281,16 +321,24 @@ object EgyDeadSource {
     }
 
     private suspend fun resolvePlayer(url: String, referer: String): List<Mirror> {
-        val response = app.get(url, headers = headers(referer), timeout = 25)
+        val response = app.get(url, headers = playerHeaders(referer), timeout = 25)
         if (response.code != 200) return emptyList()
 
-        val payload = INERTIA_PAYLOAD.find(response.text)?.groupValues?.get(1) ?: return emptyList()
+        var payload = INERTIA_PAYLOAD.find(response.text)?.groupValues?.get(1)
+        if (payload == null && response.cookies.isNotEmpty()) {
+            val retry = runCatching {
+                app.get(url, headers = playerHeaders(referer), cookies = response.cookies, timeout = 25)
+            }.getOrNull()
+            if (retry != null) payload = INERTIA_PAYLOAD.find(retry.text)?.groupValues?.get(1)
+        }
+        payload ?: return emptyList()
+        // The component name is JSON encoded, so "files/mirror/video" arrives as "files\/mirror\/video".
         if (!payload.replace("\\/", "/").contains(INERTIA_COMPONENT)) return emptyList()
 
         val version = INERTIA_VERSION.find(payload)?.groupValues?.get(1).orEmpty()
         val json = app.get(
             url,
-            headers = headers(referer) + mapOf(
+            headers = playerHeaders(referer) + mapOf(
                 "X-Inertia" to "true",
                 "X-Inertia-Version" to version,
                 "X-Inertia-Partial-Data" to "streams",
@@ -298,6 +346,7 @@ object EgyDeadSource {
                 "X-Requested-With" to "XMLHttpRequest",
                 "Accept" to "text/html, application/xhtml+xml",
             ),
+            cookies = response.cookies,
             timeout = 25,
         ).text
 
