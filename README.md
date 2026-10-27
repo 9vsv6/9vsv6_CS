@@ -19,9 +19,15 @@ Everything is scraped from the public pages of those sites. The repo does not ho
 posters, plots, cast, seasons, episodes) comes from **TMDB**, and playback is
 resolved from Arabic streaming sites by title + season + episode.
 
-It is built on CloudStream's `TmdbProvider`, so episodes carry a
-`TmdbLink(title, season, episode)` payload. `loadLinks` then asks each source in
-turn and merges whatever it finds:
+It queries the TMDB REST API directly instead of extending CloudStream's
+`TmdbProvider`: the runtime used by Harbor only ships a **stub** of that class
+(constructor only, `TmdbLink` missing), so a `TmdbProvider` subclass fails with
+`ClassNotFoundException` at install time. The provider therefore uses only core
+APIs (`MainAPI`, `newMovieLoadResponse`, `newTvSeriesLoadResponse`, …) and
+`org.json`, all of which that runtime bundles.
+
+Episodes carry a small JSON payload (`{"title":…,"season":…,"episode":…}`), and
+`loadLinks` asks each source in turn and merges whatever it finds:
 
 | Source | Status | Notes |
 |---|---|---|

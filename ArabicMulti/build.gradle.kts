@@ -1,4 +1,4 @@
-version = 1
+﻿version = 2
 
 cloudstream {
     description = "Arabic movies & series: TMDB catalogue with playback from Arabic sites (EgyDead)"
