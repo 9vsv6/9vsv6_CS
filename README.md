@@ -167,6 +167,25 @@ It runs on demand via `.github/workflows/smoke-test.yml` (Actions → **Smoke te
 Please run it locally rather than relying on CI: GitHub-hosted runners are in datacenter IP ranges that
 both sites block, so the checks pass on a home connection and fail from CI.
 
+## Runtime test (Harbor's own loader)
+
+`tools/harness/run.ps1` loads a `.cs3` with Harbor's bundled **capstan** runtime — the
+same loader the app uses — so a provider can be tested without clicking through the UI:
+
+```powershell
+.\tools\harness\run.ps1 -Cs3 .\ArabicMulti\build\ArabicMulti.cs3 `
+    -Url "https://www.themoviedb.org/movie/969681"
+
+.\tools\harness\run.ps1 -Cs3 .\ArabicMulti\build\ArabicMulti.cs3 `
+    -Url "https://www.themoviedb.org/tv/1396" -Season 1 -Episode 1
+```
+
+It prints `LOAD`, `PLAYABLE`/`EPISODE`, then `LINKS handled=… count=…` plus each extractor
+attempt, which is what the app logs as `D/Extractor` / `D/ArabicMulti`.
+
+Verified this way: ArabicMulti v6 on *Spider-Man: Brand New Day* →
+`handled=true count=10` (Uqload, Streamwish 720/480, Dood, Streamruby).
+
 ## Disclaimer
 
 This project is not affiliated with WitAnime, Anime4Up or EgyDead. It only indexes publicly available pages, in the same way a browser does. All content belongs to its respective owners.

@@ -1,5 +1,6 @@
 package com.arabicmulti
 
+import android.util.Log
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -78,15 +79,22 @@ object EgyDeadSource {
         } catch (_: Exception) {
             return false
         }
+        Log.d("ArabicMulti", "EgyDead search '$title' -> ${cards.size} cards")
         if (cards.isEmpty()) return false
 
         val wanted = normalise(title)
         val ranked = cards
-            .map { it to titleScore(wanted, normalise(it.title), year, it.title) }
+            .map { card -> card to titleScore(wanted, normalise(card.title)) }
             .filter { it.second <= 2 }
-            .sortedBy { it.second }
+            .sortedWith(
+                compareBy(
+                    { it.second },
+                    { if (year != null && it.first.title.contains(year.toString())) 0 else 1 },
+                )
+            )
             .take(6)
 
+        Log.d("ArabicMulti", "EgyDead ranked=${ranked.size} best=${ranked.firstOrNull()?.second} title=${ranked.firstOrNull()?.first?.title}")
         for ((card, _) in ranked) {
             try {
                 if (season == null || episode == null) {
@@ -195,22 +203,21 @@ object EgyDeadSource {
         return null
     }
 
-    private fun titleScore(wanted: String, candidate: String, year: Int?, raw: String): Int {
+    private fun titleScore(wanted: String, candidate: String): Int {
         if (wanted.isBlank() || candidate.isBlank()) return Int.MAX_VALUE
-        val base = when {
+        return when {
             candidate == wanted -> 0
             candidate.startsWith(wanted) || wanted.startsWith(candidate) -> 1
             candidate.contains(wanted) || wanted.contains(candidate) -> 2
             else -> Int.MAX_VALUE
         }
-        if (base == Int.MAX_VALUE) return base
-        return if (year != null && raw.contains(year.toString())) base else base + 1
     }
 
     private fun normalise(value: String): String =
         value.lowercase()
             .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
-            .replace(Regex("""\b(مشاهدة|تحميل|مترجم|مترجمة|اون|لاين|كامل|مسلسل|فيلم)\b"""), " ")
+            // No \b here: Arabic letters are not \w, so \b(فيلم)\b never matches.
+            .replace(Regex("""(مشاهدة|تحميل|مترجم|مترجمة|اون|لاين|كامل|مسلسل|فيلم)"""), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
 
@@ -259,6 +266,7 @@ object EgyDeadSource {
             if (retry != null) servers = extractServers(retry.document)
         }
 
+        Log.d("ArabicMulti", "EgyDead watch servers=${servers.size}")
         if (servers.isEmpty()) return false
 
         var found = false
@@ -277,6 +285,7 @@ object EgyDeadSource {
             if (direct) continue
 
             val mirrors = runCatching { resolvePlayer(serverUrl, watchUrl) }.getOrNull().orEmpty()
+            Log.d("ArabicMulti", "EgyDead server $serverName mirrors=${mirrors.size}")
             if (mirrors.isEmpty()) {
                 runCatching { genericLinks(serverUrl, serverName, watchUrl, emit) }
                 continue

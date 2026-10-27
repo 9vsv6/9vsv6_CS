@@ -153,10 +153,12 @@ class ArabicMulti : MainAPI() {
                 this.tags = tags
             }
         } else {
+            // Movies use 0/0 instead of JSON null: some Android JSON stubs serialise
+            // JSONObject.NULL as the string "null", which then parses as season 0.
             val data = JSONObject().apply {
                 put("title", title)
-                put("season", JSONObject.NULL)
-                put("episode", JSONObject.NULL)
+                put("season", 0)
+                put("episode", 0)
             }.toString()
 
             newMovieLoadResponse(title, url, TvType.Movie, data) {
@@ -224,8 +226,8 @@ class ArabicMulti : MainAPI() {
         }
 
         val title = json.optString("title").takeIf { it.isNotBlank() } ?: return false
-        val season = if (json.isNull("season")) null else json.optInt("season")
-        val episode = if (json.isNull("episode")) null else json.optInt("episode")
+        val season = json.optInt("season", 0).takeIf { it > 0 }
+        val episode = json.optInt("episode", 0).takeIf { it > 0 }
 
         var found = false
         if (runCatching {
