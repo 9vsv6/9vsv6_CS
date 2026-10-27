@@ -1,0 +1,9 @@
+{
+  "name": "Arabic Anime",
+  "description": "WitAnime + Anime4Up + EgyDead - Arabic anime, movies and series for CloudStream",
+  "iconUrl": "https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/icon.png",
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/plugins.json"
+  ]
+}

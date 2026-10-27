@@ -1,0 +1,88 @@
+[
+    {
+        "url": "https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/Anime4up.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "Anime4up",
+        "internalName": "Anime4up",
+        "authors": [
+            "ArabicAnimePlugins"
+        ],
+        "description": "Anime4Up - Arabic subtitled anime streaming (anime4up)",
+        "fileSize": 23580,
+        "repositoryUrl": "https://github.com/9vsv6/9vsv6_CS",
+        "language": "ar",
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=anime4up.rest&sz=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-89277eb86de3d3d194dc60938e2ca6d9cf8b48819f8349d51495814bd5521109"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/ArabicMulti.cs3",
+        "status": 1,
+        "version": 6,
+        "name": "ArabicMulti",
+        "internalName": "ArabicMulti",
+        "authors": [
+            "ArabicAnimePlugins"
+        ],
+        "description": "Arabic movies & series: TMDB catalogue with playback from Arabic sites (EgyDead)",
+        "fileSize": 43968,
+        "repositoryUrl": "https://github.com/9vsv6/9vsv6_CS",
+        "language": "ar",
+        "tvTypes": [
+            "Movie",
+            "TvSeries"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=egydead.com&sz=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-d71b65da07b8df49a8a6d254a09623deb0547cd6bf5250acaedc985ef4e47625"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/EgyDead.cs3",
+        "status": 1,
+        "version": 1,
+        "name": "EgyDead",
+        "internalName": "EgyDead",
+        "authors": [
+            "ArabicAnimePlugins"
+        ],
+        "description": "EgyDead - Arabic movies, series and anime (k8w4e.sbs)",
+        "fileSize": 35438,
+        "repositoryUrl": "https://github.com/9vsv6/9vsv6_CS",
+        "language": "ar",
+        "tvTypes": [
+            "Movie",
+            "TvSeries",
+            "Anime",
+            "AnimeMovie"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=k8w4e.sbs&sz=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-00cb8b3354fa104925645ad4ca3bb15edbe9c8e4fe4486f4c80ad5c595865eda"
+    },
+    {
+        "url": "https://raw.githubusercontent.com/9vsv6/9vsv6_CS/builds/Witanime.cs3",
+        "status": 1,
+        "version": 2,
+        "name": "Witanime",
+        "internalName": "Witanime",
+        "authors": [
+            "ArabicAnimePlugins"
+        ],
+        "description": "WitAnime - Arabic subtitled anime streaming (witanime.site)",
+        "fileSize": 33420,
+        "repositoryUrl": "https://github.com/9vsv6/9vsv6_CS",
+        "language": "ar",
+        "tvTypes": [
+            "Anime",
+            "AnimeMovie"
+        ],
+        "iconUrl": "https://www.google.com/s2/favicons?domain=witanime.site&sz=128",
+        "apiVersion": 1,
+        "fileHash": "sha256-9874cf015121fd4f00ca6a62d8b3691693c2b619a2ea5ecfdd4c440f9ce424d1"
+    }
+]
